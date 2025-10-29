@@ -17,6 +17,13 @@ const TextContent = Object.freeze({
 
 
 
+function generateId() {
+    return `task_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+}
+
+
+
+
 class TodoApp {
     constructor() {
         this.tasks = [];
@@ -169,6 +176,7 @@ class TodoApp {
             }
         } catch (error) {
             console.error('Ошибка загрузки из localStorage:', error);
+            this.tasks = [];
         }
     }
 
@@ -195,20 +203,40 @@ class TodoApp {
 
         const tasksToRender = this.getFilteredTasks();
 
+        if (tasksToRender.length === 0) {
+            const emptyMessage = document.createElement('div');
+            emptyMessage.className = 'empty-message';
+            emptyMessage.textContent = this.getEmptyMessage();
+            this.tasksContainer.appendChild(emptyMessage);
+            return;
+        }
+        
         tasksToRender.forEach(task => {
             const taskElement = this.createTaskElement(task);
             this.tasksContainer.appendChild(taskElement);
         });
     }
 
+    getEmptyMessage() {
+        switch (this.currentFilter) {
+            case FilterState.ACTIVE:
+                return 'Нет активных задач';
+            case FilterState.COMPLETED:
+                return 'Нет выполненных задач';
+            default:
+                return 'Задач пока нет. Добавьте первую!';
+        }
+    }
+
     createTaskElement(task) {
         const taskElement = document.createElement('div');
         taskElement.className = `task ${task.completed ? 'completed' : ''}`;
-        taskElement.draggable = true;
+        taskElement.dataset.taskId = task.id;
         
         const checkbox = document.createElement('input');
         checkbox.type = 'checkbox';
         checkbox.checked = task.completed;
+        checkbox.className = 'task-checkbox';
         checkbox.addEventListener('change', () => {
             this.toggleTaskCompletion(task.id);
         });
@@ -218,8 +246,15 @@ class TodoApp {
         textSpan.className = 'task-text';
         
         const dateSpan = document.createElement('span');
-        dateSpan.textContent = task.date;
+        dateSpan.textContent = this.formatDate(task.date);
         dateSpan.className = 'task-date';
+        
+        const editButton = document.createElement('button');
+        editButton.textContent = '✎';
+        editButton.className = 'edit-button';
+        editButton.addEventListener('click', () => {
+            this.editTask(task.id);
+        });
         
         const deleteButton = document.createElement('button');
         deleteButton.textContent = '×';
@@ -231,17 +266,67 @@ class TodoApp {
         taskElement.appendChild(checkbox);
         taskElement.appendChild(textSpan);
         taskElement.appendChild(dateSpan);
+        taskElement.appendChild(editButton);
         taskElement.appendChild(deleteButton);
         
         return taskElement;
     }
 
-    addTask() {
+    formatDate(dateString) {
+        if (!dateString) return 'Без даты';
+        
+        const date = new Date(dateString);
+        return date.toLocaleDateString('ru-RU');
+    }
 
+    addTask() {
+        const text = this.textInput.value.trim();
+        const date = this.dateInput.value;
+        
+        if (!text) {
+            alert('Введите текст задачи');
+            return;
+        }
+        
+        const newTask = {
+            id: generateId(),
+            text: text,
+            date: date || new Date().toISOString().split('T')[0],
+            completed: false,
+            createdAt: new Date().toISOString(),
+            order: this.tasks.length
+        };
+        
+        this.tasks.push(newTask);
+        this.saveToStorage();
+        
+        this.textInput.value = '';
+        this.dateInput.value = '';
+
+        this.renderTasks();
+    }
+
+    saveToStorage() {
+        try {
+            localStorage.setItem('todo-app-tasks', JSON.stringify(this.tasks));
+        } catch (error) {
+            console.error('Ошибка сохранения в localStorage:', error);
+        }
     }
 
     deleteTask(taskId) {
-
+        if (!confirm('Вы уверены, что хотите удалить эту задачу?')) {
+            return;
+        }
+        
+        const taskIndex = this.tasks.findIndex(task => task.id === taskId);
+        
+        if (taskIndex !== -1) {
+            this.tasks.splice(taskIndex, 1);
+            
+            this.saveToStorage();
+            this.renderTasks();
+        }
     }
 
     toggleTaskCompletion(taskId) {

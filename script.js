@@ -21,12 +21,15 @@ const SortOrder = Object.freeze({
 });
 
 
+// ----------------------------------------------------------------------------------
+
 
 function generateId() {
     return `task_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 }
 
 
+// ----------------------------------------------------------------------------------
 
 
 class TodoApp {
@@ -35,6 +38,7 @@ class TodoApp {
         this.currentFilter = FilterState.ALL;
         this.currentSearch = '';
         this.sortOrder = SortOrder.DESC;
+        this.draggedTask = null;
         this.init();
     }
 
@@ -189,6 +193,7 @@ class TodoApp {
             const savedTasks = localStorage.getItem('todo-app-tasks');
             if (savedTasks) {
                 this.tasks = JSON.parse(savedTasks);
+                this.tasks.sort((a, b) => (a.order || 0) - (b.order || 0));
             }
         } catch (error) {
             console.error('Ошибка загрузки из localStorage:', error);
@@ -259,6 +264,12 @@ class TodoApp {
         const taskElement = document.createElement('div');
         taskElement.className = `task ${task.completed ? 'completed' : ''}`;
         taskElement.dataset.taskId = task.id;
+        taskElement.draggable = true;
+
+        taskElement.addEventListener('dragstart', (e) => this.handleDragStart(e, task));
+        taskElement.addEventListener('dragover', (e) => this.handleDragOver(e));
+        taskElement.addEventListener('drop', (e) => this.handleDrop(e, task));
+        taskElement.addEventListener('dragend', (e) => this.handleDragEnd(e));
         
         const checkbox = document.createElement('input');
         checkbox.type = 'checkbox';
@@ -333,7 +344,6 @@ class TodoApp {
         
         this.textInput.value = '';
         this.dateInput.value = '';
-
         this.renderTasks();
     }
 
@@ -495,6 +505,76 @@ class TodoApp {
         this.updateSortButtonText();
         this.renderTasks();
     }
+
+
+    handleDragStart(event, task) {
+        this.draggedTask = task;
+        event.dataTransfer.effectAllowed = 'move';
+        event.dataTransfer.setData('text/plain', task.id);
+        
+        event.target.classList.add('dragging');
+        console.log('Начали перетаскивание:', task.text);
+    }
+
+    handleDragOver(event) {
+        event.preventDefault(); // Разрешаем дроп
+        event.dataTransfer.dropEffect = 'move';
+        
+        const taskElement = event.target.closest('.task');
+        if (taskElement && taskElement !== document.querySelector('.dragging')) {
+            taskElement.classList.add('drag-over');
+        }
+    }
+
+    handleDrop(event, targetTask) {
+        event.preventDefault();
+        
+        document.querySelectorAll('.task').forEach(task => {
+            task.classList.remove('drag-over');
+        });
+        
+        if (!this.draggedTask || this.draggedTask.id === targetTask.id) {
+            return;
+        }
+        
+        console.log('Перемещаем задачу:', this.draggedTask.text, '→ перед:', targetTask.text);
+        
+        this.moveTask(this.draggedTask.id, targetTask.id);
+    }
+
+    handleDragEnd(event) {
+        document.querySelectorAll('.task').forEach(task => {
+            task.classList.remove('dragging', 'drag-over');
+        });
+        this.draggedTask = null;
+        console.log('Завершили перетаскивание');
+    }
+
+    moveTask(draggedTaskId, targetTaskId) {
+        const draggedIndex = this.tasks.findIndex(task => task.id === draggedTaskId);
+        const targetIndex = this.tasks.findIndex(task => task.id === targetTaskId);
+        
+        if (draggedIndex === -1 || targetIndex === -1) {
+            return;
+        }
+        
+        const [movedTask] = this.tasks.splice(draggedIndex, 1);
+        
+        this.tasks.splice(targetIndex, 0, movedTask);
+        
+        this.updateTaskOrder();
+        this.saveToStorage();
+        this.renderTasks();
+    }
+
+    updateTaskOrder() {
+        this.tasks.forEach((task, index) => {
+            task.order = index;
+        });
+    }
+
+
+
 }
 
 

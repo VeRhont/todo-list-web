@@ -29,6 +29,17 @@ function generateId() {
 }
 
 
+function formatDate(dateString) {
+    if (!dateString) return 'Без даты';
+    
+    try {
+        const date = new Date(dateString);
+        return date.toLocaleDateString('ru-RU');
+    } catch (error) {
+        return 'Неверная дата';
+    }
+}
+
 // ----------------------------------------------------------------------------------
 
 
@@ -39,6 +50,7 @@ class TodoApp {
         this.currentSearch = '';
         this.sortOrder = SortOrder.DESC;
         this.draggedTask = null;
+        this.manualOrder = false;
         this.init();
     }
 
@@ -123,7 +135,7 @@ class TodoApp {
         filters.appendChild(completedButton);
         
         const sortButton = document.createElement('button');
-        sortButton.textContent = 'Сортировать по дате'; // вынести в конст
+        sortButton.textContent = 'Сортировать по дате'; 
         sortButton.className = 'sort-button';
         
         controls.appendChild(searchInput);
@@ -185,7 +197,19 @@ class TodoApp {
                 break;
         }
         
+        if (this.manualOrder) {
+            return filteredTasks.sort((a, b) => (a.order || 0) - (b.order || 0));
+        }
+        
         return this.sortTasksByDateLogic(filteredTasks);
+    }
+
+    saveToStorage() {
+        try {
+            localStorage.setItem('todo-app-tasks', JSON.stringify(this.tasks));
+        } catch (error) {
+            console.error('Ошибка сохранения в localStorage:', error);
+        }
     }
 
     loadFromStorage() {
@@ -284,7 +308,7 @@ class TodoApp {
         textSpan.className = 'task-text';
         
         const dateSpan = document.createElement('span');
-        dateSpan.textContent = this.formatDate(task.date);
+        dateSpan.textContent = formatDate(task.date);
         dateSpan.className = 'task-date';
         
         const editButton = document.createElement('button');
@@ -308,17 +332,6 @@ class TodoApp {
         taskElement.appendChild(deleteButton);
         
         return taskElement;
-    }
-
-    formatDate(dateString) {
-        if (!dateString) return 'Без даты';
-        
-        try {
-            const date = new Date(dateString);
-            return date.toLocaleDateString('ru-RU');
-        } catch (error) {
-            return 'Неверная дата';
-        }
     }
 
     addTask() {
@@ -345,14 +358,6 @@ class TodoApp {
         this.textInput.value = '';
         this.dateInput.value = '';
         this.renderTasks();
-    }
-
-    saveToStorage() {
-        try {
-            localStorage.setItem('todo-app-tasks', JSON.stringify(this.tasks));
-        } catch (error) {
-            console.error('Ошибка сохранения в localStorage:', error);
-        }
     }
 
     deleteTask(taskId) {
@@ -385,8 +390,6 @@ class TodoApp {
                 const checkbox = taskElement.querySelector('.task-checkbox');
                 checkbox.checked = task.completed;
             }
-            
-            console.log('Статус задачи обновлен:', task);
         }
     }
 
@@ -470,21 +473,12 @@ class TodoApp {
     }
 
     sortTasksByDate() {
+        this.manualOrder = false;
+        
         this.sortOrder = this.sortOrder === SortOrder.ASC ? SortOrder.DESC : SortOrder.ASC;
-    
+        
         this.updateSortButtonText();
         this.renderTasks();
-    }
-
-    updateSortButtonText() {
-        const sortButton = document.querySelector('.sort-button');
-        if (sortButton) {
-            const arrow = this.sortOrder === SortOrder.ASC ? '↑' : '↓';
-            const orderText = this.sortOrder === SortOrder.ASC ? ' (старые сверху)' : ' (новые сверху)';
-            sortButton.textContent = `Сортировать по дате ${arrow}`;
-            
-            sortButton.title = `Нажмите для сортировки по ${this.sortOrder === SortOrder.ASC ? 'убыванию' : 'возрастанию'}`;
-        }
     }
 
     sortTasksByDateLogic(tasks) {
@@ -500,12 +494,30 @@ class TodoApp {
         });
     }
 
+    updateSortButtonText() {
+        const sortButton = document.querySelector('.sort-button');
+        if (sortButton) {
+            const arrow = this.sortOrder === SortOrder.ASC ? '↑' : '↓';
+            let text = `Сортировать по дате ${arrow}`;
+            
+            if (this.manualOrder) {
+                text += ' (ручной порядок)';
+                sortButton.style.fontWeight = 'normal';
+            } else {
+                sortButton.style.fontWeight = 'bold';
+            }
+            
+            sortButton.textContent = text;
+        }
+    }
+
     resetSortOrder() {
         this.sortOrder = SortOrder.DESC;
         this.updateSortButtonText();
         this.renderTasks();
     }
 
+    // ----------------------- Drag and drop -----------------------------
 
     handleDragStart(event, task) {
         this.draggedTask = task;
@@ -513,7 +525,6 @@ class TodoApp {
         event.dataTransfer.setData('text/plain', task.id);
         
         event.target.classList.add('dragging');
-        console.log('Начали перетаскивание:', task.text);
     }
 
     handleDragOver(event) {
@@ -536,18 +547,15 @@ class TodoApp {
         if (!this.draggedTask || this.draggedTask.id === targetTask.id) {
             return;
         }
-        
-        console.log('Перемещаем задачу:', this.draggedTask.text, '→ перед:', targetTask.text);
-        
+                
         this.moveTask(this.draggedTask.id, targetTask.id);
     }
 
-    handleDragEnd(event) {
+    handleDragEnd() {
         document.querySelectorAll('.task').forEach(task => {
             task.classList.remove('dragging', 'drag-over');
         });
         this.draggedTask = null;
-        console.log('Завершили перетаскивание');
     }
 
     moveTask(draggedTaskId, targetTaskId) {
@@ -561,6 +569,7 @@ class TodoApp {
         const [movedTask] = this.tasks.splice(draggedIndex, 1);
         
         this.tasks.splice(targetIndex, 0, movedTask);
+        this.manualOrder = true;
         
         this.updateTaskOrder();
         this.saveToStorage();
@@ -572,9 +581,6 @@ class TodoApp {
             task.order = index;
         });
     }
-
-
-
 }
 
 

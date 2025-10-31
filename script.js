@@ -40,6 +40,24 @@ function formatDate(dateString) {
     }
 }
 
+
+// ----------------------------------------------------------------------------------
+
+
+const link = document.createElement('link');
+link.rel = 'stylesheet';
+link.href = 'styles.css';
+
+const favicon = document.createElement('link');
+favicon.rel = 'icon';
+favicon.type = 'image/png';
+favicon.href = 'images/icon.webp';
+
+document.head.appendChild(link);
+document.head.appendChild(favicon);
+document.title = 'To-Do list';
+
+
 // ----------------------------------------------------------------------------------
 
 
